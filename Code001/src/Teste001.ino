@@ -2,26 +2,48 @@
 #include <ModbusMaster.h>
 #include <Arduino.h>
 #include <WiFi.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
 
 //Definições
 #define RS485Serial  Serial2  // Utilize a porta Serial2 para comunicação RS485 (ou outra porta disponível)
 #define SLAVE_ADD    1        // Defina o endereço do escravo aqui (pode ser qualquer valor entre 1 e 247) - Definido no proprio Controlador
 #define RX_PIN      16        //RX2 
 #define TX_PIN      17        //TX2 
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 
 //Variaveis que tomarão conta da conexão Wifi
 const char* ssid = "Dicalab";
 const char* password = "dicalab2763";
 
-/////////////////////////////////////////////////////////Código//////////////////////////////////////////////////////////////////////////////////////////
+//Criação de instâncias 
+ModbusMaster modbus;
+Adafruit_SSD1306 display (SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-ModbusMaster modbus; //Criando instância ModBus
+
+/////////////////////////////////////////////////////////Código//////////////////////////////////////////////////////////////////////////////////////////
 
 void setup() {
   Serial.begin(115200, SERIAL_8N1);       // Inicializa a comunicação serial para fins de depuração
   RS485Serial.begin(9600, SERIAL_8N2, RX_PIN, TX_PIN);  // Inicializa a comunicação RS485 com a taxa de transmissão desejada
   modbus.begin(SLAVE_ADD, RS485Serial); // Inicializa o ModbusMaster com o endereço do escravo e a porta Serial RS485
   wifiConnection();
+
+  //config. da tela
+  display.begin(SCREEN_ADDRESS, true);
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.print("Iniciando...");
+  display.display();
+   delay(2000);
 }
 
 //variavel que vai armazenar o tempo para dar um delay - millis()= Retorna o número de milissegundos passados desde que a placa Arduino começou a executar o programa atual. Esse número irá sofrer overflow (chegar ao maior número possível e então voltar pra zero), após aproximadamente 50 dias.
@@ -38,7 +60,7 @@ void loop() {
   
     if (result == modbus.ku8MBSuccess){
       Serial.print("Temperatura: ");
-      float temp = modbus.getResponseBuffer(0);
+      float temp = modbus.getResponseBuffer(0)/10.0f;
       Serial.println(temp);
     }
     else{
