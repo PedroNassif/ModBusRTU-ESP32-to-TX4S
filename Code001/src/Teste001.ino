@@ -36,14 +36,14 @@ void setup() {
   wifiConnection();
 
   //config. da tela
-  display.begin(SCREEN_ADDRESS, true);
+  display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS, true);
+  
   display.clearDisplay();
-  display.setTextSize(2);
+  display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
   display.print("Iniciando...");
   display.display();
-   delay(2000);
 }
 
 //variavel que vai armazenar o tempo para dar um delay - millis()= Retorna o número de milissegundos passados desde que a placa Arduino começou a executar o programa atual. Esse número irá sofrer overflow (chegar ao maior número possível e então voltar pra zero), após aproximadamente 50 dias.
@@ -62,12 +62,34 @@ void loop() {
       Serial.print("Temperatura: ");
       float temp = modbus.getResponseBuffer(0)/10.0f;
       Serial.println(temp);
+
+        //Printando no display
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(SSD1306_WHITE);
+        display.setCursor(0,0);
+        display.println("Temperatura:");
+        display.setTextSize(2);
+        display.setCursor(10,10);
+        display.print(temp);
+        display.print(" C");
+        display.write(9);
+        drawWifiSymbol();
+        display.display();
     }
     else{
       getMsgError(&modbus, result);
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(SSD1306_WHITE);
+        display.setCursor(0,10);
+        display.print("Tem algo errado!");
+        display.display();
+      
     }
     lastMillis = currentMillis;
     Serial.println();
+   
   } 
 }
 
@@ -115,8 +137,21 @@ void wifiConnection (){
     delay(500);
     Serial.print(".");
   }
-
+  
   Serial.println();
   Serial.print("Conectado ao WiFi com o endereço IP: ");
   Serial.println(WiFi.localIP());
+}
+
+void drawWifiSymbol() {
+  // display.drawLine(116,27,126,27,WHITE);
+  // display.drawLine(118,29,124,29,WHITE);
+  // display.drawLine(120,31,122,31,WHITE);
+  display.drawLine(113,28,127,28,WHITE);
+  display.drawLine(115,29,125,29,WHITE);
+  display.drawLine(117,30,123,30,WHITE);
+  display.drawLine(119,31,121,31,WHITE);
+  
+
+
 }
