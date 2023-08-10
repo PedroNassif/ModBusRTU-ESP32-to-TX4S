@@ -151,7 +151,5 @@ void drawWifiSymbol() {
   display.drawLine(115,29,125,29,WHITE);
   display.drawLine(117,30,123,30,WHITE);
   display.drawLine(119,31,121,31,WHITE);
-  
-
 
 }
