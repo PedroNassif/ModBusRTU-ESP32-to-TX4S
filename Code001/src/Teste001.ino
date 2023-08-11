@@ -6,7 +6,9 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
+#include <SPIFFS.h>
+#include <WebSocketsServer.h>
+#include <ESPAsyncWebServer.h>
 
 //Definições
 #define RS485Serial  Serial2  // Utilize a porta Serial2 para comunicação RS485 (ou outra porta disponível)
@@ -17,7 +19,7 @@
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-
+const uint16_t dataTxtTimeInterval = 500;
 //Variaveis que tomarão conta da conexão Wifi
 const char* ssid = "Dicalab";
 const char* password = "dicalab2763";
@@ -25,6 +27,8 @@ const char* password = "dicalab2763";
 //Criação de instâncias 
 ModbusMaster modbus;
 Adafruit_SSD1306 display (SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+AsyncWebServer server (80);
+WebSocketsServer websockets (81);
 
 
 /////////////////////////////////////////////////////////Código//////////////////////////////////////////////////////////////////////////////////////////
@@ -44,6 +48,29 @@ void setup() {
   display.setCursor(0,0);
   display.print("Iniciando...");
   display.display();
+
+  // //criando uma Access Point (AP) de wifi para o server -> Caso não esteja conectdo ao WiFi
+  // WiFi.softAp("Esp32AP","");
+  // Serial1.println("\nsoftAP");
+  // Serial1.println(WiFi.softAPIP());
+
+//checkando o SPIFFS
+  if(!SPIFFS.begin(true)){
+      Serial.println("Erro ao montar SPIFFS");
+      return;
+  }
+
+
+//Conectando o server e criando arquivos index.html e text.html através do SPIFFS
+server.on("/", HTTP_GET, [](AsyncWebServerRequest*request)
+          { request->send(SPIFFS, "/index.html", "test/html");});
+
+//incializando
+server.onNotFound(notFound);
+server.begin();
+
+websockets.begin();
+websockets.onEvent(webSocketEvent);
 }
 
 //variavel que vai armazenar o tempo para dar um delay - millis()= Retorna o número de milissegundos passados desde que a placa Arduino começou a executar o programa atual. Esse número irá sofrer overflow (chegar ao maior número possível e então voltar pra zero), após aproximadamente 50 dias.
@@ -51,6 +78,8 @@ unsigned long lastMillis = 0;
 
 
 void loop() {
+  
+  websockets.loop();
   //Vamos fazer uma checagem para não sobrepor a função, e deixar com uma leitura de 1s (1000ms). 
   long currentMillis = millis();
 
@@ -62,6 +91,12 @@ void loop() {
       Serial.print("Temperatura: ");
       float temp = modbus.getResponseBuffer(0)/10.0f;
       Serial.println(temp);
+
+      //enviando o dado em Json para o WebSocket
+      String data = "{\"Temperatura\": + String(temp)}";
+      websockets.broadcastTXT(data);
+      Serial1.println();
+      Serial1.println(data);
 
         //Printando no display
         display.clearDisplay();
@@ -88,7 +123,7 @@ void loop() {
       
     }
     lastMillis = currentMillis;
-    Serial.println();
+    Serial1.println();
    
   } 
 }
@@ -151,7 +186,27 @@ void drawWifiSymbol() {
   display.drawLine(115,29,125,29,WHITE);
   display.drawLine(117,30,123,30,WHITE);
   display.drawLine(119,31,121,31,WHITE);
+
+}
+
+//callbacks
+void notFound(AsyncWebServerRequest *request){
+  request->send(404, "text/plain" , "Página não encontrada!");
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length){
+  switch (type)
+  {
+  case WStype_DISCONNECTED:
+    Serial.printf("[%u] Desconectado!\n",num);
+    break;
   
-
-
+  case WStype_CONNECTED:
+  {
+    IPAddress ip = websockets.remoteIP(num);
+    Serial.printf("[%u] Conectado em %d.%d.%d.%d\n", num, ip[0],ip[1],ip[2],ip[3]);
+    websockets.sendTXT(num, "Conectado no servidor");
+  }
+    break;
+  }
 }
