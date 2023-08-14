@@ -37,6 +37,7 @@ void setup() {
   Serial.begin(115200, SERIAL_8N1);       // Inicializa a comunicação serial para fins de depuração
   RS485Serial.begin(9600, SERIAL_8N2, RX_PIN, TX_PIN);  // Inicializa a comunicação RS485 com a taxa de transmissão desejada
   modbus.begin(SLAVE_ADD, RS485Serial); // Inicializa o ModbusMaster com o endereço do escravo e a porta Serial RS485
+
   wifiConnection();
 
   //config. da tela
@@ -49,10 +50,8 @@ void setup() {
   display.print("Iniciando...");
   display.display();
 
-  // //criando uma Access Point (AP) de wifi para o server -> Caso não esteja conectdo ao WiFi
-  // WiFi.softAp("Esp32AP","");
-  // Serial1.println("\nsoftAP");
-  // Serial1.println(WiFi.softAPIP());
+  //criando uma Access Point (AP) de wifi para o server -> Caso não esteja conectdo ao WiFi
+  wifiAPmaker();
 
 //checkando o SPIFFS
   if(!SPIFFS.begin(true)){
@@ -62,28 +61,33 @@ void setup() {
 
 
 //Conectando o server e criando arquivos index.html e text.html através do SPIFFS
-server.on("/", HTTP_GET, [](AsyncWebServerRequest*request)
-          { request->send(SPIFFS, "/index.html", "test/html");});
+server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send(SPIFFS, "/index.html", "text/html");});
+
+server.onNotFound(notFound);
 
 //incializando
-server.onNotFound(notFound);
 server.begin();
-
 websockets.begin();
 websockets.onEvent(webSocketEvent);
 }
 
 //variavel que vai armazenar o tempo para dar um delay - millis()= Retorna o número de milissegundos passados desde que a placa Arduino começou a executar o programa atual. Esse número irá sofrer overflow (chegar ao maior número possível e então voltar pra zero), após aproximadamente 50 dias.
-unsigned long lastMillis = 0;
-
+//unsigned long lastMillis = 0;
 
 void loop() {
   
+  //Inicializa o websockets
   websockets.loop();
-  //Vamos fazer uma checagem para não sobrepor a função, e deixar com uma leitura de 1s (1000ms). 
-  long currentMillis = millis();
 
-  if (currentMillis - lastMillis > 1000){
+  //Vamos fazer uma checagem para não sobrepor a função, e deixar com uma leitura de 1s (1000ms). 
+  //long currentMillis = millis();
+  static uint32_t prevMillis = 0;
+
+  //if (currentMillis - lastMillis > 1000){
+  if (millis() - prevMillis >= dataTxtTimeInterval){
+    //iguala o tempo
+    prevMillis = millis();  
+    
     Serial.println("Slave " + (String)SLAVE_ADD); //Aqui vai printar o Salve utilizado
     uint8_t result = modbus.readInputRegisters(0x03E8, 1); //uint8_t readInputRegisters(uint16_t address (Registrador Hexadecimal encontrado na tabela), uint16_t quantity, uint16_t *dest);
   
@@ -93,38 +97,22 @@ void loop() {
       Serial.println(temp);
 
       //enviando o dado em Json para o WebSocket
-      String data = "{\"Temperatura\": + String(temp)}";
+      String data = "{\"temperature\": " + String(temp) + "}";
       websockets.broadcastTXT(data);
-      Serial1.println();
-      Serial1.println(data);
+      Serial.println();
+      Serial.println(data);
 
         //Printando no display
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setTextColor(SSD1306_WHITE);
-        display.setCursor(0,0);
-        display.println("Temperatura:");
-        display.setTextSize(2);
-        display.setCursor(10,10);
-        display.print(temp);
-        display.print(" C");
-        display.write(9);
-        drawWifiSymbol();
+        drawTemp(temp);
         display.display();
     }
     else{
       getMsgError(&modbus, result);
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setTextColor(SSD1306_WHITE);
-        display.setCursor(0,10);
-        display.print("Tem algo errado!");
-        display.display();
-      
+      drawErro();
+      display.display(); 
     }
-    lastMillis = currentMillis;
-    Serial1.println();
-   
+    //lastMillis = currentMillis;
+    Serial.println();
   } 
 }
 
@@ -178,17 +166,38 @@ void wifiConnection (){
   Serial.println(WiFi.localIP());
 }
 
-void drawWifiSymbol() {
-  // display.drawLine(116,27,126,27,WHITE);
-  // display.drawLine(118,29,124,29,WHITE);
-  // display.drawLine(120,31,122,31,WHITE);
-  display.drawLine(113,28,127,28,WHITE);
-  display.drawLine(115,29,125,29,WHITE);
-  display.drawLine(117,30,123,30,WHITE);
-  display.drawLine(119,31,121,31,WHITE);
-
+void wifiAPmaker(){
+  WiFi.softAP("Esp32AP","");
+  Serial.println("\nsoftAP");
+  Serial.println(WiFi.softAPIP());
 }
 
+// void drawWifiSymbol() {
+//   display.drawLine(113,28,127,28,WHITE);
+//   display.drawLine(115,29,125,29,WHITE);
+//   display.drawLine(117,30,123,30,WHITE);
+//   display.drawLine(119,31,121,31,WHITE);
+// }
+
+void drawTemp(float temp){
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("Temperatura:");
+  display.setTextSize(2);
+  display.setCursor(10,10);
+  display.print(temp);
+  display.print(" C");
+}
+
+void drawErro(){
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,10);
+  display.print("Tem algo errado!");
+}
 //callbacks
 void notFound(AsyncWebServerRequest *request){
   request->send(404, "text/plain" , "Página não encontrada!");
