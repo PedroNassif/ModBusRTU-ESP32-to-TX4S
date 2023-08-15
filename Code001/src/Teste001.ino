@@ -20,62 +20,57 @@
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 const uint16_t dataTxtTimeInterval = 500;
+
 //Variaveis que tomarão conta da conexão Wifi
 const char* ssid = "Dicalab";
 const char* password = "dicalab2763";
 
-//Criação de instâncias 
+//Criação de objetos 
 ModbusMaster modbus;
 Adafruit_SSD1306 display (SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 AsyncWebServer server (80);
 WebSocketsServer websockets (81);
 
-
-/////////////////////////////////////////////////////////Código//////////////////////////////////////////////////////////////////////////////////////////
+//........................................Código..................................
 
 void setup() {
+  WiFi.begin(ssid, password);
+
   Serial.begin(115200, SERIAL_8N1);       // Inicializa a comunicação serial para fins de depuração
   RS485Serial.begin(9600, SERIAL_8N2, RX_PIN, TX_PIN);  // Inicializa a comunicação RS485 com a taxa de transmissão desejada
   modbus.begin(SLAVE_ADD, RS485Serial); // Inicializa o ModbusMaster com o endereço do escravo e a porta Serial RS485
-
-  wifiConnection();
-
+ 
   //config. da tela
   display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS, true);
   
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,0);
-  display.print("Iniciando...");
+  //Desenhando o "Iniciando"
+  drawIniciando();
   display.display();
-
-  //criando uma Access Point (AP) de wifi para o server -> Caso não esteja conectdo ao WiFi
-  wifiAPmaker();
 
 //checkando o SPIFFS
   if(!SPIFFS.begin(true)){
+      Serial.println();
       Serial.println("Erro ao montar SPIFFS");
       return;
   }
+  else{
+    Serial.println();
+    Serial.println("SPIFFS montado com sucesso!");
+  }
 
+  //Conectando o server e criando arquivos index.html e text.html através do SPIFFS
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
+    request->send(SPIFFS, "/index.html", "text/html"); });
+  server.onNotFound(notFound);
 
-//Conectando o server e criando arquivos index.html e text.html através do SPIFFS
-server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send(SPIFFS, "/index.html", "text/html");});
+  //incializando
+  server.begin(); //server assíncrono
+  websockets.begin();
+  websockets.onEvent(webSocketEvent);
+  }
 
-server.onNotFound(notFound);
-
-//incializando
-server.begin();
-websockets.begin();
-websockets.onEvent(webSocketEvent);
-}
-
-//variavel que vai armazenar o tempo para dar um delay - millis()= Retorna o número de milissegundos passados desde que a placa Arduino começou a executar o programa atual. Esse número irá sofrer overflow (chegar ao maior número possível e então voltar pra zero), após aproximadamente 50 dias.
-//unsigned long lastMillis = 0;
 
 void loop() {
-  
   //Inicializa o websockets
   websockets.loop();
 
@@ -198,24 +193,70 @@ void drawErro(){
   display.setCursor(0,10);
   display.print("Tem algo errado!");
 }
+
+void drawIniciando(){
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.print("Iniciando...");
+}
+
+void hexdump(const void *mem, uint32_t len, uint8_t cols = 16) {
+	const uint8_t* src = (const uint8_t*) mem;
+	Serial.printf("\n[HEXDUMP] Address: 0x%08X len: 0x%X (%d)", (ptrdiff_t)src, len, len);
+	for(uint32_t i = 0; i < len; i++) {
+		if(i % cols == 0) {
+			Serial.printf("\n[0x%08X] 0x%08X: ", (ptrdiff_t)src, i);
+		}
+		Serial.printf("%02X ", *src);
+		src++;
+	}
+	Serial.printf("\n");
+}
+
 //callbacks
 void notFound(AsyncWebServerRequest *request){
   request->send(404, "text/plain" , "Página não encontrada!");
 }
 
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length){
-  switch (type)
-  {
-  case WStype_DISCONNECTED:
-    Serial.printf("[%u] Desconectado!\n",num);
-    break;
-  
-  case WStype_CONNECTED:
-  {
-    IPAddress ip = websockets.remoteIP(num);
-    Serial.printf("[%u] Conectado em %d.%d.%d.%d\n", num, ip[0],ip[1],ip[2],ip[3]);
-    websockets.sendTXT(num, "Conectado no servidor");
-  }
-    break;
-  }
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+
+    switch(type) {
+        case WStype_DISCONNECTED:
+            Serial.printf("[%u] Disconnected!\n", num);
+            break;
+        case WStype_CONNECTED:
+            {
+                IPAddress ip = websockets.remoteIP(num);
+                Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+				// send message to client
+				websockets.sendTXT(num, "Connected");
+            }
+            break;
+        case WStype_TEXT:
+            Serial.printf("[%u] get Text: %s\n", num, payload);
+
+            // send message to client
+            // webSocket.sendTXT(num, "message here");
+
+            // send data to all connected clients
+            // webSocket.broadcastTXT("message here");
+            break;
+        case WStype_BIN:
+            Serial.printf("[%u] get binary length: %u\n", num, length);
+            hexdump(payload, length);
+
+            // send message to client
+            // webSocket.sendBIN(num, payload, length);
+            break;
+        case WStype_ERROR:			
+        case WStype_FRAGMENT_TEXT_START:
+        case WStype_FRAGMENT_BIN_START:
+        case WStype_FRAGMENT:
+        case WStype_FRAGMENT_FIN:
+        Serial.println("Erro nessa caralha");
+			break;
+    }
+
 }
