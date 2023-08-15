@@ -2,7 +2,6 @@
 #include <ModbusMaster.h>
 #include <Arduino.h>
 #include <WiFi.h>
-#include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -19,7 +18,7 @@
 #define SCREEN_HEIGHT 32 // OLED display height, in pixels
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-const uint16_t dataTxtTimeInterval = 500;
+const uint16_t dataTxtTimeInterval = 2000;
 
 //Variaveis que tomarão conta da conexão Wifi
 const char* ssid = "Dicalab";
@@ -59,16 +58,18 @@ void setup() {
   }
 
   //Conectando o server e criando arquivos index.html e text.html através do SPIFFS
+  // server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
+  //   request->send(SPIFFS, "index.html", "text.html"); });
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
-    request->send(SPIFFS, "/index.html", "text/html"); });
+    request->send(200, "text/plain", "Hello"); });
   server.onNotFound(notFound);
 
   //incializando
   server.begin(); //server assíncrono
+
   websockets.begin();
   websockets.onEvent(webSocketEvent);
   }
-
 
 void loop() {
   //Inicializa o websockets
