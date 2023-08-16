@@ -33,8 +33,6 @@ WebSocketsServer websockets (81);
 //........................................Código..................................
 
 void setup() {
-  WiFi.begin(ssid, password);
-
   Serial.begin(115200, SERIAL_8N1);       // Inicializa a comunicação serial para fins de depuração
   RS485Serial.begin(9600, SERIAL_8N2, RX_PIN, TX_PIN);  // Inicializa a comunicação RS485 com a taxa de transmissão desejada
   modbus.begin(SLAVE_ADD, RS485Serial); // Inicializa o ModbusMaster com o endereço do escravo e a porta Serial RS485
@@ -46,22 +44,16 @@ void setup() {
   drawIniciando();
   display.display();
 
-//checkando o SPIFFS
-  if(!SPIFFS.begin(true)){
-      Serial.println();
-      Serial.println("Erro ao montar SPIFFS");
-      return;
-  }
-  else{
-    Serial.println();
-    Serial.println("SPIFFS montado com sucesso!");
-  }
+  wifiConnection();
+
+  //checkando o SPIFFS
+  SPIFFSConnection();
 
   //Conectando o server e criando arquivos index.html e text.html através do SPIFFS
   // server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
   //   request->send(SPIFFS, "index.html", "text.html"); });
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ 
-    request->send(200, "text/plain", "Hello"); });
+  server.on("/data/", HTTP_GET, [](AsyncWebServerRequest *request){ 
+    request->send(SPIFFS, "/index.html", "/text.html"); });
   server.onNotFound(notFound);
 
   //incializando
@@ -76,10 +68,8 @@ void loop() {
   websockets.loop();
 
   //Vamos fazer uma checagem para não sobrepor a função, e deixar com uma leitura de 1s (1000ms). 
-  //long currentMillis = millis();
   static uint32_t prevMillis = 0;
 
-  //if (currentMillis - lastMillis > 1000){
   if (millis() - prevMillis >= dataTxtTimeInterval){
     //iguala o tempo
     prevMillis = millis();  
@@ -95,8 +85,8 @@ void loop() {
       //enviando o dado em Json para o WebSocket
       String data = "{\"temperature\": " + String(temp) + "}";
       websockets.broadcastTXT(data);
-      Serial.println();
-      Serial.println(data);
+      // Serial.println();
+      // Serial.println(data);
 
         //Printando no display
         drawTemp(temp);
@@ -168,6 +158,19 @@ void wifiAPmaker(){
   Serial.println(WiFi.softAPIP());
 }
 
+void SPIFFSConnection(){
+   if(!SPIFFS.begin(true)){
+      Serial.println();
+      Serial.println("Erro ao montar SPIFFS");
+      return;
+  }
+  else{
+      Serial.println();
+      Serial.println("Sucesso ao montar SPIFFS");
+      return;
+  }
+   Serial.println();
+}
 // void drawWifiSymbol() {
 //   display.drawLine(113,28,127,28,WHITE);
 //   display.drawLine(115,29,125,29,WHITE);
@@ -203,61 +206,28 @@ void drawIniciando(){
   display.print("Iniciando...");
 }
 
-void hexdump(const void *mem, uint32_t len, uint8_t cols = 16) {
-	const uint8_t* src = (const uint8_t*) mem;
-	Serial.printf("\n[HEXDUMP] Address: 0x%08X len: 0x%X (%d)", (ptrdiff_t)src, len, len);
-	for(uint32_t i = 0; i < len; i++) {
-		if(i % cols == 0) {
-			Serial.printf("\n[0x%08X] 0x%08X: ", (ptrdiff_t)src, i);
-		}
-		Serial.printf("%02X ", *src);
-		src++;
-	}
-	Serial.printf("\n");
-}
 
 //callbacks
 void notFound(AsyncWebServerRequest *request){
-  request->send(404, "text/plain" , "Página não encontrada!");
+  request->send(404, "text/plain" , "Pagina nao encontrada!");
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-
-    switch(type) {
-        case WStype_DISCONNECTED:
-            Serial.printf("[%u] Disconnected!\n", num);
-            break;
-        case WStype_CONNECTED:
-            {
-                IPAddress ip = websockets.remoteIP(num);
-                Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
-				// send message to client
-				websockets.sendTXT(num, "Connected");
-            }
-            break;
-        case WStype_TEXT:
-            Serial.printf("[%u] get Text: %s\n", num, payload);
-
-            // send message to client
-            // webSocket.sendTXT(num, "message here");
-
-            // send data to all connected clients
-            // webSocket.broadcastTXT("message here");
-            break;
-        case WStype_BIN:
-            Serial.printf("[%u] get binary length: %u\n", num, length);
-            hexdump(payload, length);
-
-            // send message to client
-            // webSocket.sendBIN(num, payload, length);
-            break;
-        case WStype_ERROR:			
-        case WStype_FRAGMENT_TEXT_START:
-        case WStype_FRAGMENT_BIN_START:
-        case WStype_FRAGMENT:
-        case WStype_FRAGMENT_FIN:
-        Serial.println("Erro nessa caralha");
-			break;
-    }
-
+  switch(type) {
+      case WStype_DISCONNECTED:
+          Serial.printf("[%u] Disconnected!\n", num);
+          Serial.println();
+          Serial.println("Disconetado");
+          break;
+      case WStype_CONNECTED:
+        {
+          Serial.println();
+          Serial.println("Conetado");
+          IPAddress ip = websockets.remoteIP(num);
+          Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+          // send message to client
+          websockets.sendTXT(num, "Connected");
+        }
+      break;
+    } 
 }

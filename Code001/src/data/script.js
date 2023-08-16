@@ -1,4 +1,6 @@
-let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
+let ws = new WebSocket('ws://' +  location.hostname + ':81/');
+
+ws.send("Correto!")
 
 ws.onmessage = function (event){
     var data = JSON.parse(event.data);
@@ -18,7 +20,7 @@ function updateCardPercentage(cardId, value, unit){
     const radius = circle.releasePointerCapture.baseVal.value;
     const circumference = radius * 2 * Math.PI;
 
-    if(cardId ==="temperature"){
+    if(cardId === "temperature"){
         const offset = circumference - (value/40)*circumference;
         circle.style.strokeDashoffset = offset;
         circle.style.stroke = "#00a1ff"
