@@ -144,9 +144,7 @@ void wifiConnection (){
 }
 
 void drawWifiSymbol() {
-  // display.drawLine(116,27,126,27,WHITE);
-  // display.drawLine(118,29,124,29,WHITE);
-  // display.drawLine(120,31,122,31,WHITE);
+
   display.drawLine(113,28,127,28,WHITE);
   display.drawLine(115,29,125,29,WHITE);
   display.drawLine(117,30,123,30,WHITE);
