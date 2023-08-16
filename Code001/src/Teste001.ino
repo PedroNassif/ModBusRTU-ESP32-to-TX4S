@@ -44,7 +44,8 @@ void setup() {
   drawIniciando();
   display.display();
 
-  wifiConnection();
+  //wifiConnection();
+  wifiAPmaker();
 
   //checkando o SPIFFS
   SPIFFSConnection();
